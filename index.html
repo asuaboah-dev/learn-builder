@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Learn Builder</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
+<style>
+:root{--bg:#faf7f0;--card:#fff;--fg:#1c1b22;--mut:#6b6a75;--pri:#5b3df5;--ok:#1f9d55;--bad:#d93b3b;--bd:#e3dfd3;--tile:#fff4cf;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);color-scheme:light}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#15141b;--card:#201f29;--fg:#f2f0ea;--mut:#a09fab;--pri:#8d78ff;--ok:#38c172;--bad:#ff6b6b;--bd:#35333f;--tile:#3a3420;color-scheme:dark}}
+*{box-sizing:border-box}html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--fg);font:17px/1.5 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+main{max-width:680px;margin:0 auto;padding:16px}h1{font-size:28px;margin:8px 0 4px}h2{font-size:23px;margin:4px 0 8px;line-height:1.3}
+.card{background:var(--card);border:2px solid var(--fg);border-radius:20px;padding:18px;box-shadow:4px 4px 0 var(--fg);margin-top:14px}
+.mut{color:var(--mut);font-size:14px}.tag{font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--pri)}
+input,textarea{width:100%;font:inherit;color:var(--fg);background:var(--bg);border:2px solid var(--bd);border-radius:12px;padding:10px 12px;margin-top:6px}
+textarea{min-height:90px;resize:vertical}label{display:block;font-weight:600;margin-top:12px}label.c{display:flex;gap:8px;align-items:center;font-weight:500}label.c input{width:auto;margin:0}
+button{font:inherit;font-weight:700;cursor:pointer;border-radius:12px;border:2px solid var(--fg);padding:10px 16px;background:var(--card);color:var(--fg)}
+button.p{background:var(--pri);color:#fff;border-color:var(--pri)}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:10px}
+.line{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:10px}.lab{font-weight:700;margin-right:4px}
+.slot{height:46px;padding:0 10px;display:inline-flex;align-items:center;justify-content:center;border:2px dashed var(--mut);border-radius:10px;font-weight:700;font-size:19px}
+.slot.a{border-color:var(--pri);background:color-mix(in srgb,var(--pri) 12%,transparent)}
+.slot.d{border:2px solid var(--ok);background:var(--ok);color:#fff;animation:pop .35s}@keyframes pop{50%{transform:scale(1.15)}}
+.tiles{display:flex;flex-wrap:wrap;gap:10px;margin-top:10px}
+.tile{touch-action:none;user-select:none;-webkit-user-select:none;cursor:grab}
+.ghost{position:fixed;z-index:99;pointer-events:none;transform:translate(-50%,-50%) scale(1.1);opacity:.95;margin:0}
+.slot.h{border-color:var(--ok);background:color-mix(in srgb,var(--ok) 22%,transparent)}
+.tile{background:var(--tile);box-shadow:0 3px 0 var(--fg);font-size:20px;min-height:46px}
+.tile.w{background:var(--bad);color:#fff;border-color:var(--bad);animation:sh .4s}@keyframes sh{25%{transform:translateX(-6px)}75%{transform:translateX(6px)}}
+.pic{background:#fff;border:2px solid var(--bd);border-radius:14px;padding:6px;margin-top:10px}.pic img{display:block;width:100%;max-height:300px;object-fit:contain}
+.err{color:var(--bad);font-weight:600;margin-top:10px}.ctr{text-align:center}
+.upb{display:inline-block;margin:0;border:2px solid var(--fg);border-radius:12px;padding:10px 16px;font-weight:700;cursor:pointer;background:var(--card)}
+.hid{position:absolute;opacity:0;width:1px;height:1px;overflow:hidden}
+.spin{display:inline-block;width:16px;height:16px;border:3px solid var(--bd);border-top-color:var(--pri);border-radius:50%;animation:r .8s linear infinite;vertical-align:-3px;margin-right:6px}@keyframes r{to{transform:rotate(360deg)}}
+</style></head><body><main id="app"></main>
+<script>
+const $=s=>document.querySelector(s),app=$("#app");
+const esc=s=>{const d=document.createElement("div");d.textContent=s;return d.innerHTML};
+const norm=s=>String(s).trim().toLowerCase();
+const shuffle=a=>{a=[...a];for(let i=a.length-1;i>0;i--){const j=Math.random()*(i+1)|0;[a[i],a[j]]=[a[j],a[i]]}return a};
+let P={country:"",level:""},sample=null,src=null,Q=[],seen=[],G=null,busy=0,fails=0,count=0,voice=true,hard=false,err="";
+try{P=JSON.parse(localStorage.getItem("lb:p")||"{}")}catch(e){}
+const ok=()=>"speechSynthesis" in window&&"SpeechSynthesisUtterance" in window;let VO=null,vq=0;
+const pickVoice=()=>{try{const v=speechSynthesis.getVoices();VO=v.find(x=>/^en[-_]GB/i.test(x.lang))||v.find(x=>/^en/i.test(x.lang))||v[0]||null}catch(e){}};
+if(ok()){pickVoice();try{speechSynthesis.onvoiceschanged=pickVoice}catch(e){}}
+const say=(t,f)=>{if((!voice&&!f)||!ok()||!t)return;try{const s=speechSynthesis;s.cancel();clearTimeout(vq);vq=setTimeout(()=>{const u=new SpeechSynthesisUtterance(String(t));if(VO){u.voice=VO;u.lang=VO.lang}else u.lang="en-GB";u.rate=.85;s.resume();s.speak(u)},80)}catch(e){}};
+
+let FILE=null,lastErr="";
+async function pickFile(){
+  const f=$("#fl").files[0],s=$("#fs");if(!f)return;FILE=null;s.textContent="Reading "+f.name+"…";
+  try{let t;const n=f.name.toLowerCase();
+    if(n.endsWith(".pdf"))t=await pdfText(f);
+    else if(n.endsWith(".docx")){if(!window.mammoth)throw new Error("Word reader not available");t=(await mammoth.extractRawText({arrayBuffer:await f.arrayBuffer()})).value}
+    else if(n.endsWith(".doc"))throw new Error("Old .doc files aren’t supported. Save as .docx or PDF");
+    else t=await f.text();
+    t=(t||"").replace(/\s+/g," ").trim();
+    if(t.length<40)throw new Error("No readable text found. Scanned pages need OCR, which isn’t built yet");
+    FILE={name:f.name,text:t};s.textContent="✅ "+f.name+" ("+t.split(" ").length+" words)";
+  }catch(e){s.textContent="❌ "+(e.message||"Couldn’t read that file")+". Try pasting the text instead."}
+}
+async function ai(raw,p){const r=await raw(p+"\nReturn ONLY the JSON array, no other text.");let t=String(r&&r.text||"").replace(/```json|```/g,"");const a=t.indexOf("[");if(a<0)throw new Error("no JSON in reply");t=t.slice(a);const b=t.lastIndexOf("]");
+  try{return JSON.parse(t.slice(0,b+1))}catch(e){const c=t.lastIndexOf("},");if(c<0)throw new Error("reply was cut off");return JSON.parse(t.slice(0,c+1)+"]")}}
+async function askAPI(p){const r=await fetch("/api/generate",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({prompt:p})});if(!r.ok)throw new Error("server "+r.status);return (await r.json()).result}
+function setup(){
+  app.innerHTML=`<h1>Learn Builder</h1><p class="mut">Learn by building answers from a mixed pile of words, symbols and pictures. Wrong pieces turn red. Right pieces turn green and lock in.</p>
+  <div class="card"><div class="tag">About you</div>
+  <label>Which country are you learning in? <input id="co" value="${esc(P.country||"")}" placeholder="e.g. Ghana, Kenya, India"></label>
+  <label>Your class or level <input id="lv" value="${esc(P.level||"")}" placeholder="e.g. SHS 1, Grade 6, Form 2"></label>
+  <div class="tag" style="margin-top:20px">What do you want to learn?</div>
+  <label>Type a topic <input id="tp" placeholder="e.g. The atom, Fractions, Photosynthesis"></label>
+  <label>Or paste text from your book <textarea id="tx"></textarea></label>
+  <div style="margin-top:12px"><b>Or upload a book or notes</b><input id="fl" type="file"><div class="row"><span class="mut" id="fs">${FILE?"✅ "+esc(FILE.name):"PDF, Word (.docx), TXT or MD"}</span></div></div>
+  <label class="c"><input type="checkbox" id="hd"> Add a few wrong pieces to the pile (harder)</label>
+  <div class="row"><button class="p" id="go">Start learning</button></div><div class="err" id="er">${esc(err)}</div></div>`;
+  $("#go").onclick=start;$("#fl").onchange=pickFile;
+}
+const wait=m=>{app.innerHTML=`<div class="card ctr"><span class="spin"></span>${esc(m||"Preparing your questions…")}</div>`};
+async function pdfText(f){if(!window.pdfjsLib)throw new Error("PDF reader not available");pdfjsLib.GlobalWorkerOptions.workerSrc="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+  const d=await pdfjsLib.getDocument({data:await f.arrayBuffer()}).promise;let t="";for(let i=1;i<=d.numPages;i++){const s=$("#fs");if(s)s.textContent="Reading page "+i+" of "+d.numPages+"…";const c=await(await d.getPage(i)).getTextContent();t+=c.items.map(x=>x.str).join(" ")+"\n"}return t}
+async function start(){
+  const co=$("#co").value.trim(),lv=$("#lv").value.trim(),tp=$("#tp").value.trim();let tx=$("#tx").value.trim();const fl=FILE;hard=$("#hd").checked;err="";if(ok()){try{const u=new SpeechSynthesisUtterance(" ");u.volume=0;speechSynthesis.speak(u)}catch(e){}}
+  if(!co||!lv||(!tp&&!tx&&!fl)){$("#er").textContent="Add your country, your level, and a topic, text or file.";return}
+  P={country:co,level:lv};try{localStorage.setItem("lb:p",JSON.stringify(P))}catch(e){}
+  sample={json:askAPI};
+  wait(fl?"Reading your file…":"Preparing your questions…");
+  if(fl)tx=fl.text;
+  tx=(tx||"").replace(/\s+/g," ").trim();const chunks=[];for(let i=0;i<tx.length;i+=4500)chunks.push(tx.slice(i,i+4500));
+  src={topic:tp||(fl&&fl.name)||"your text",chunks,ci:0};Q=[];seen=[];fails=0;count=0;
+  wait("Making your first questions…");
+  for(let k=0;k<3&&!Q.length&&canMore();k++)await more();
+  if(!Q.length){err="Couldn’t make questions ("+(lastErr||"unknown reason")+"). Please try again.";return setup()}
+  nextQ();
+}
+const canMore=()=>fails<2&&(src.chunks.length?src.ci<src.chunks.length:true);
+async function more(){
+  if(busy||!canMore())return;busy=1;
+  try{let ctx;if(src.chunks.length)ctx="Use ONLY facts from this text (include formulas, steps and labelled parts if present):\n"+src.chunks[src.ci++];
+    else ctx=`Topic: ${src.topic}. Do not repeat these questions: ${seen.slice(-50).join(" | ")}`;
+    const r=await sample.json(`Learner level: ${P.level}. Country: ${P.country}. Follow the official ${P.country} national curriculum, exam style, terms, units and examples for this level. The learner struggles to read, so use short simple sentences. Make 6 to 8 varied questions. Every answer is built by choosing pieces from a pile. Return ONLY a JSON array of items:
+{"q":"question","type":"build","lines":["answer line"],"extra":["2 plausible wrong pieces"]} for definitions, explanations, formulas and calculations (one line per step; separate every word, number, symbol and unit with spaces, e.g. "Speed = 100 ÷ 20").
+{"q":"…","type":"match","rows":[{"l":"term","a":"its meaning or symbol"}]} to match terms, symbols or units (3 to 5 rows, short answers).
+{"q":"…","type":"label","rows":[{"l":"1","a":"part name"}],"svg":"<svg>"} for diagrams; use only if a diagram is truly needed; svg is a simple drawing under 1500 characters (viewBox 0 0 400 300, no text elements, no scripts) with numbered circles pointing at the parts.
+{"q":"…","type":"pick","rows":[{"l":"","a":"one word, number, emoji or shape such as 🔺 ● ■"}],"extra":["wrong pieces"]} for quick questions answered by one piece (shapes, pictures, numbers).
+Accurate facts only. Mix the types suitably for the topic.\n${ctx}`);
+    let n=0;for(const x of Array.isArray(r)?r:(r&&r.items)||[]){const it=toItem(x);if(it){Q.push(it);seen.push(it.q);n++}}
+    if(!n)lastErr="the reply had no usable questions";fails=n?0:fails+1;
+  }catch(e){fails++;lastErr=String(e&&(e.message||e.code)||e)}
+  busy=0;
+}
+function toItem(x){
+  if(!x||!x.q)return null;let rows;
+  if(x.type==="build"&&Array.isArray(x.lines))rows=x.lines.map(l=>({label:"",toks:String(l).split(/\s+/).filter(Boolean)}));
+  else if(Array.isArray(x.rows))rows=x.rows.filter(r=>r&&r.a!=null&&String(r.a).trim()).map(r=>({label:String(r.l||""),toks:[String(r.a).trim()]}));
+  if(!rows||!rows.length||rows.some(r=>!r.toks.length))return null;
+  const svg=x.type==="label"&&/^\s*<svg/i.test(x.svg||"")&&!/<script|on\w+=/i.test(x.svg)?x.svg:"";
+  if(x.type==="label"&&!svg)rows.forEach(r=>r.label=r.label?"Part "+r.label:"");
+  return{q:String(x.q),rows,svg,extra:(x.extra||[]).map(String).filter(Boolean).slice(0,3)};
+}
+async function nextQ(){
+  if(Q.length<6)more();let t=0;
+  while(!Q.length&&(busy||canMore())&&t++<60){wait();if(busy)await new Promise(r=>setTimeout(r,500));else await more()}
+  if(!Q.length)return finish();
+  const it=Q.shift(),slots=[];it.rows.forEach((r,ri)=>r.toks.forEach(w=>slots.push({w,ri})));
+  const all=slots.map(s=>s.w);if(hard)all.push(...it.extra.filter(e=>!all.some(a=>norm(a)===norm(e))));
+  G={it,slots,filled:0,mist:0,wrong:null,tiles:shuffle(all.map((w,id)=>({id,w})))};say(it.q);render();
+}
+function finish(){app.innerHTML=`<div class="card ctr"><h2>🎉 Well done!</h2><p class="mut">You finished ${count} questions.</p><div class="row" style="justify-content:center">${!src.chunks.length?`<button class="p" id="mo">More questions</button>`:""}<button id="hm">Home</button></div></div>`;
+  $("#hm").onclick=setup;const m=$("#mo");if(m)m.onclick=()=>{fails=0;nextQ()}}
+function render(){
+  const {it,slots}=G,done=G.filled===slots.length;let i=-1;
+  const rows=it.rows.map(r=>`<div class="line">${r.label?`<span class="lab">${esc(r.label)}</span>`:""}${r.toks.map(w=>{i++;const d=i<G.filled;
+    return `<span class="slot ${d?"d":i===G.filled?"a":""}" data-s="${i}" style="min-width:${Math.max(48,w.length*13)}px">${d?esc(w):""}</span>`}).join("")}</div>`).join("");
+  const pic=it.svg?`<div class="pic"><img alt="Diagram to label" src="data:image/svg+xml;charset=utf-8,${encodeURIComponent(it.svg)}"></div>`:"";
+  app.innerHTML=`<div class="mut">Question ${count+1}</div>
+  <div class="card"><div class="row" style="margin-top:0"><h2 style="flex:1">${esc(it.q)}</h2><button id="sp" aria-label="Read aloud">🔊</button></div>${pic}${rows}
+  ${done?`<div class="ctr" style="margin-top:20px"><p style="font-size:24px;font-weight:800;color:var(--ok);margin:0">${G.mist?G.mist+" wrong pick"+(G.mist>1?"s":"")+". It will come back.":"⭐ Perfect!"}</p><div class="row" style="justify-content:center"><button id="rd">🔊 Hear it</button><button class="p" id="nx">Next →</button></div></div>`
+  :`<p class="mut" style="margin-top:18px">Drag a piece into the highlighted space. Tap a piece to hear it.</p><div class="tiles">${G.tiles.map(t=>`<button class="tile ${G.wrong===t.id?"w":""}" data-i="${t.id}">${esc(t.w)}</button>`).join("")}</div>`}
+  </div><div class="row" style="justify-content:space-between"><button id="hm">Home</button>${ok()?`<button id="vo">${voice?"🔈 Voice on":"🔇 Voice off"}</button>`:`<span class="mut">Voice isn’t supported here</span>`}</div>`;
+  $("#hm").onclick=setup;$("#sp").onclick=()=>say(it.q,1);const vb=$("#vo");if(vb)vb.onclick=()=>{voice=!voice;if(voice)say("Voice on");render()};
+  if(done){$("#rd").onclick=()=>say(it.rows.map(r=>r.label+" "+r.toks.join(" ")).join(". "),1);
+    $("#nx").onclick=()=>{count++;if(G.mist&&!it.again)Q.push({...it,again:1});nextQ()};return}
+  app.querySelectorAll(".tile").forEach(b=>{b.onpointerdown=drag;b.onkeydown=e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();pick(+b.dataset.i)}}});
+}
+function pick(id){
+  if(G.wrong!==null)return;const t=G.tiles.find(x=>x.id===id),tg=G.slots[G.filled];say(t.w);
+  if(norm(t.w)===norm(tg.w)){G.tiles=G.tiles.filter(x=>x.id!==id);G.filled++;if(G.filled===G.slots.length)setTimeout(()=>say(G.it.rows.map(r=>r.label+" "+r.toks.join(" ")).join(". ")),500)}
+  else{G.wrong=id;G.mist++;setTimeout(()=>{G.wrong=null;render()},500)}
+  render();
+}
+function drag(e){
+  const b=e.currentTarget;if(G.wrong!==null||G.filled===G.slots.length)return;e.preventDefault();
+  const id=+b.dataset.i,x0=e.clientX,y0=e.clientY;let g=null;
+  const clr=()=>app.querySelectorAll(".slot.h").forEach(z=>z.classList.remove("h"));
+  const at=ev=>{const s=document.elementFromPoint(ev.clientX,ev.clientY);return s&&s.closest?s.closest(".slot"):null};
+  const move=ev=>{if(!g&&Math.hypot(ev.clientX-x0,ev.clientY-y0)>8){g=b.cloneNode(true);g.className="tile ghost";document.body.appendChild(g);b.style.opacity=.3}
+    if(g){g.style.left=ev.clientX+"px";g.style.top=ev.clientY+"px";clr();const z=at(ev);if(z&&!z.classList.contains("d"))z.classList.add("h")}};
+  const up=ev=>{window.removeEventListener("pointermove",move);window.removeEventListener("pointerup",up);window.removeEventListener("pointercancel",up);
+    clr();b.style.opacity="";if(g)g.remove();
+    if(!g){say(G.tiles.find(t=>t.id===id).w,1);return}
+    const z=at(ev);if(!z||z.classList.contains("d"))return;
+    if(+z.dataset.s===G.filled)pick(id);
+    else{G.wrong=id;G.mist++;say("Fill the highlighted space first");setTimeout(()=>{G.wrong=null;render()},600);render()}};
+  window.addEventListener("pointermove",move);window.addEventListener("pointerup",up);window.addEventListener("pointercancel",up)}
+setup();
+</script></body></html>
